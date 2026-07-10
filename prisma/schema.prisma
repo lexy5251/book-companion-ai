@@ -1,0 +1,188 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../app/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum BookStatus {
+  UPLOADED
+  PROCESSING
+  READY
+  FAILED
+}
+
+enum ChatMessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+enum ChatQuestionMode {
+  FREEFORM
+  HIGHLIGHT
+}
+
+model User {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String?  @unique
+  name      String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  books       Book[]
+  chatThreads ChatThread[]
+  highlights  Highlight[]
+}
+
+model Book {
+  id             String     @id @default(uuid()) @db.Uuid
+  userId         String?    @db.Uuid
+  title          String
+  author         String?
+  description    String?    @db.Text
+  language       String?
+  sourceFileName String
+  sourceFilePath String?
+  sourceMimeType String     @default("application/epub+zip")
+  status         BookStatus @default(UPLOADED)
+  uploadedAt     DateTime   @default(now())
+  createdAt      DateTime   @default(now())
+  updatedAt      DateTime   @updatedAt
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+  chapters    Chapter[]
+  chunks      Chunk[]
+  chatThreads ChatThread[]
+  highlights  Highlight[]
+
+  @@index([userId])
+  @@index([status])
+  @@index([uploadedAt])
+}
+
+model Chapter {
+  id           String   @id @default(uuid()) @db.Uuid
+  bookId       String   @db.Uuid
+  chapterIndex Int
+  title        String?
+  href         String?
+  contentHtml  String   @db.Text
+  contentText  String?  @db.Text
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  book         Book          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chunks       Chunk[]
+  highlights   Highlight[]
+  chatMessages ChatMessage[]
+
+  @@unique([bookId, chapterIndex])
+  @@index([bookId])
+}
+
+model Chunk {
+  id                String                       @id @default(uuid()) @db.Uuid
+  bookId            String                       @db.Uuid
+  chapterId         String                       @db.Uuid
+  chunkIndex        Int
+  chapterChunkIndex Int
+  text              String                       @db.Text
+  tokenCount        Int?
+  charStart         Int?
+  charEnd           Int?
+  embedding         Unsupported("vector(1536)")?
+  createdAt         DateTime                     @default(now())
+
+  book      Book       @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapter   Chapter    @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  citations Citation[]
+
+  @@unique([bookId, chunkIndex])
+  @@unique([chapterId, chapterChunkIndex])
+  @@index([bookId])
+  @@index([chapterId])
+}
+
+model Highlight {
+  id           String   @id @default(uuid()) @db.Uuid
+  bookId       String   @db.Uuid
+  chapterId    String   @db.Uuid
+  userId       String?  @db.Uuid
+  selectedText String   @db.Text
+  cfiRange     String?
+  charStart    Int?
+  charEnd      Int?
+  color        String   @default("yellow")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  book         Book          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  chapter      Chapter       @relation(fields: [chapterId], references: [id], onDelete: Cascade)
+  user         User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  chatMessages ChatMessage[]
+
+  @@index([bookId])
+  @@index([chapterId])
+  @@index([userId])
+}
+
+model ChatThread {
+  id        String   @id @default(uuid()) @db.Uuid
+  bookId    String   @db.Uuid
+  userId    String?  @db.Uuid
+  title     String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  book     Book          @relation(fields: [bookId], references: [id], onDelete: Cascade)
+  user     User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  messages ChatMessage[]
+
+  @@index([bookId])
+  @@index([userId])
+  @@index([createdAt])
+}
+
+model ChatMessage {
+  id              String            @id @default(uuid()) @db.Uuid
+  threadId        String            @db.Uuid
+  chapterId       String?           @db.Uuid
+  highlightId     String?           @db.Uuid
+  role            ChatMessageRole
+  questionMode    ChatQuestionMode?
+  content         String            @db.Text
+  highlightedText String?           @db.Text
+  model           String?
+  inputTokens     Int?
+  outputTokens    Int?
+  createdAt       DateTime          @default(now())
+
+  thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  chapter   Chapter?   @relation(fields: [chapterId], references: [id], onDelete: SetNull)
+  highlight Highlight? @relation(fields: [highlightId], references: [id], onDelete: SetNull)
+  citations Citation[]
+
+  @@index([threadId, createdAt])
+  @@index([chapterId])
+  @@index([highlightId])
+}
+
+model Citation {
+  id        String   @id @default(uuid()) @db.Uuid
+  messageId String   @db.Uuid
+  chunkId   String   @db.Uuid
+  rank      Int
+  score     Float?
+  excerpt   String?  @db.Text
+  createdAt DateTime @default(now())
+
+  message ChatMessage @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  chunk   Chunk       @relation(fields: [chunkId], references: [id], onDelete: Cascade)
+
+  @@unique([messageId, rank])
+  @@unique([messageId, chunkId])
+  @@index([chunkId])
+}
