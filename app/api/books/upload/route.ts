@@ -4,12 +4,13 @@ import { mkdir, writeFile, unlink } from "node:fs/promises";
 import path from "node:path";
 import { EPub } from "epub2";
 import { prisma } from "@/lib/prisma";
+import { chunkEmbedAndStore } from "@/lib/chunk-store";
 
 const MAX_BYTES = 50 * 1024 * 1024; // keep in sync with the upload UI
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
 
-/** Rough plain-text extraction from chapter HTML — good enough for later
- *  chunking/search; the original HTML is kept in `contentHtml` for rendering. */
+/** Rough plain-text extraction from chapter HTML — good enough for chunking /
+ *  search; the original HTML is kept in `contentHtml` for rendering. */
 function stripHtml(html: string): string {
   return html
     .replace(/<script[\s\S]*?<\/script>/gi, " ")
@@ -20,7 +21,18 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+async function removeUploadedFile(absPath: string): Promise<void> {
+  try {
+    await unlink(absPath);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+      console.error("[upload] failed to remove uploaded file", error);
+    }
+  }
+}
+
 type ChapterInput = {
+  id: string;
   chapterIndex: number;
   title: string | null;
   href: string | null;
@@ -70,29 +82,32 @@ export async function POST(req: NextRequest) {
   const absPath = path.join(UPLOAD_DIR, storedName);
   const relPath = path.posix.join("uploads", storedName); // portable, stored in DB
 
-  // --- 1. Persist raw bytes to local disk ----------------------------------
+  // --- Persist raw bytes to local disk -------------------------------------
   try {
     await mkdir(UPLOAD_DIR, { recursive: true });
     await writeFile(absPath, Buffer.from(await file.arrayBuffer()));
   } catch (err) {
     console.error("[upload] failed to write file", err);
+    // `writeFile` can leave a partial file behind (for example, if the disk
+    // fills mid-write), so clean up even though persistence did not complete.
+    await removeUploadedFile(absPath);
     return NextResponse.json(
       { error: "Could not save the uploaded file." },
       { status: 500 },
     );
   }
 
-  // --- 2. Parse the EPUB, extract metadata + chapters, 3. save rows --------
+  // `phase` lets one catch give an accurate message + status for either the
+  // parse step or the persist/embed step, while cleaning up in both cases.
+  let phase: "parse" | "process" = "parse";
   try {
     const epub = await EPub.createAsync(absPath);
-
     const title =
       epub.metadata.title?.trim() || file.name.replace(/\.epub$/i, "");
     const author = epub.metadata.creator?.trim() || null;
     const language = epub.metadata.language?.trim() || null;
     const description = epub.metadata.description?.trim() || null;
 
-    // `flow` is the spine — chapters in reading order.
     const chapters: ChapterInput[] = [];
     let chapterIndex = 0;
     for (const item of epub.flow) {
@@ -101,13 +116,13 @@ export async function POST(req: NextRequest) {
       try {
         html = await epub.getChapterAsync(item.id);
       } catch (err) {
-        // Skip an unreadable spine entry rather than fail the whole upload.
         console.warn(`[upload] could not read chapter ${item.id}`, err);
-        continue;
+        continue; // skip an unreadable spine entry, don't fail the upload
       }
       const text = stripHtml(html);
       if (!text) continue; // skip empty items (cover, nav placeholders)
       chapters.push({
+        id: randomUUID(),
         chapterIndex,
         title: item.title?.trim() || null,
         href: item.href ?? null,
@@ -116,12 +131,13 @@ export async function POST(req: NextRequest) {
       });
       chapterIndex++;
     }
-
     if (chapters.length === 0) {
       throw new Error("No readable chapters found in EPUB.");
     }
 
-    const book = await prisma.book.create({
+    // --- Persist Book + Chapters (PROCESSING until embeddings land) --------
+    phase = "process";
+    await prisma.book.create({
       data: {
         id: bookId,
         title,
@@ -131,25 +147,54 @@ export async function POST(req: NextRequest) {
         sourceFileName: file.name,
         sourceFilePath: relPath,
         sourceMimeType: "application/epub+zip",
-        // "READY" here means parsed & readable. The embedding pipeline
-        // (Phase 3) will introduce PROCESSING before chat is available.
-        status: "READY",
-        chapters: { create: chapters },
+        status: "PROCESSING",
+        chapters: {
+          create: chapters.map((c) => ({
+            id: c.id,
+            chapterIndex: c.chapterIndex,
+            title: c.title,
+            href: c.href,
+            contentHtml: c.contentHtml,
+            contentText: c.contentText,
+          })),
+        },
       },
       select: { id: true },
     });
 
+    // --- Chunk -> embed -> store vectors ----------------------------------
+    const chunkCount = await chunkEmbedAndStore(
+      bookId,
+      chapters.map((c) => ({ id: c.id, contentText: c.contentText })),
+    );
+
+    await prisma.book.update({
+      where: { id: bookId },
+      data: { status: "READY" },
+    });
+
     return NextResponse.json(
-      { bookId: book.id, title, author, chapterCount: chapters.length },
+      { bookId, title, author, chapterCount: chapters.length, chunkCount },
       { status: 201 },
     );
   } catch (err) {
-    console.error("[upload] parse/save failed", err);
-    // Roll back the orphaned file so we don't leave junk on disk.
-    await unlink(absPath).catch(() => {});
+    console.error(`[upload] ${phase} failed`, err);
+    // Roll back: remove the orphaned file and any partial book (chapters +
+    // chunks cascade). deleteMany is a no-op if the book was never created.
+    await removeUploadedFile(absPath);
+    await prisma.book.deleteMany({ where: { id: bookId } }).catch((error) => {
+      console.error("[upload] failed to remove partial database rows", error);
+    });
+
+    if (phase === "parse") {
+      return NextResponse.json(
+        { error: "Could not read this EPUB. It may be malformed or DRM-protected." },
+        { status: 422 },
+      );
+    }
     return NextResponse.json(
-      { error: "Could not read this EPUB. It may be malformed or DRM-protected." },
-      { status: 422 },
+      { error: "Could not prepare this book for search. Please try again." },
+      { status: 500 },
     );
   }
 }
