@@ -1,10 +1,14 @@
 import OpenAI from "openai";
 
-// Embedding model for the RAG pipeline. 1536 dims — matches the
-// `Chunk.embedding vector(1536)` column in the Prisma schema.
-export const EMBEDDING_MODEL = "text-embedding-3-small";
+// Embedding model for the RAG pipeline. Env-overridable so the eval harness can
+// A/B a stronger model (e.g. `text-embedding-3-large`) without a code change.
+// Dimensions is pinned to 1536 to match the `Chunk.embedding vector(1536)`
+// column — `3-large` supports Matryoshka truncation to 1536, so it drops into
+// the existing column + HNSW index with no schema migration. Both the stored
+// chunks and the query MUST use the same model, or distances are meaningless.
+export const EMBEDDING_MODEL =
+  process.env.OPENAI_EMBEDDING_MODEL || "text-embedding-3-large";
 export const EMBEDDING_DIMENSIONS = 1536;
-
 // Chunks per embedding request. The API accepts up to 2048 inputs (plus a
 // total-token cap per request). ~500-token chunks × 200 ≈ 100k tokens/request
 // — well within limits, and fewer round-trips. Smaller batches make retries on
