@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test --disable-warning=ExperimentalWarning lib/chunking.test.ts lib/embeddings.test.ts"
+    "test": "node --test --disable-warning=ExperimentalWarning lib/chunking.test.ts lib/embeddings.test.ts",
+    "eval": "tsx eval/run.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.110.0",
@@ -31,6 +32,7 @@
     "eslint-config-next": "16.2.10",
     "prisma": "^7.8.0",
     "tailwindcss": "^4",
+    "tsx": "^4.23.1",
     "typescript": "^5"
   }
 }
