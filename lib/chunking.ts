@@ -1,4 +1,4 @@
-// Naive, dependency-free chapter chunker for the embedding pipeline (Phase 3).
+// Naive, dependency-free chapter chunker for the embedding pipeline.
 // Splits a chapter's plain text into ~500-token, sentence-aligned chunks with
 // ~15% overlap. Token counts are ESTIMATED from character length (~4 chars per
 // token) — "start naive" per the project notes. Swap in a real tokenizer

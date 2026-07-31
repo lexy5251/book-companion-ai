@@ -15,18 +15,19 @@
     "@prisma/adapter-pg": "^7.8.0",
     "@prisma/client": "^7.8.0",
     "epub2": "^3.0.2",
-    "epubjs": "^0.3.93",
     "next": "16.2.10",
     "openai": "^6.45.0",
     "pg": "^8.22.0",
     "react": "19.2.4",
-    "react-dom": "19.2.4"
+    "react-dom": "19.2.4",
+    "sanitize-html": "^2.17.6"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/sanitize-html": "^2.16.1",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "16.2.10",

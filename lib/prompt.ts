@@ -7,8 +7,8 @@ export type ChatMode = "FREEFORM" | "HIGHLIGHT";
 export type ChatMessage = { role: "system" | "user"; content: string };
 
 /** Human label for a retrieved chunk's chapter. Falls back to a positional
- *  "Chapter N" when the EPUB gave no title (see the Phase 2 known issue —
- *  titles aren't parsed yet). `chapterIndex` is 0-based, so display +1. */
+ *  "Chapter N" when the EPUB gave no title. `chapterIndex` is 0-based, so
+ *  display +1. */
 function chapterLabel(chunk: RetrievedChunk): string {
   return chunk.chapterTitle?.trim() || `Chapter ${chunk.chapterIndex + 1}`;
 }
@@ -25,9 +25,8 @@ function formatContext(chunks: RetrievedChunk[]): string {
     .join("\n\n");
 }
 
-// The assistant's standing instructions. Grounding rules here are what the
-// Phase 5 evals lean on: E4 (cite only retrieved sources) and E5 (refuse to
-// answer when the passages don't cover the question).
+// The assistant's standing instructions. These grounding rules keep answers
+// tied to retrieved sources and make the assistant refuse unsupported claims.
 const SYSTEM_PROMPT = [
   "You are a reading companion helping a reader understand dense nonfiction, such as philosophy, history, and classics.",
   "Below are numbered excerpts from the book. The numbers are temporary source labels for this response only.",

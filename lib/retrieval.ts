@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 
-/** Default number of chunks to retrieve for a question. The notes' Phase 4
- *  sketch uses LIMIT 5; this is the dial the eval harness (Phase 5, E1) tunes. */
+/** Default number of chunks to retrieve for a question. The evaluation
+ *  harness can tune this value. */
 export const DEFAULT_TOP_K = 5;
 
 /** One chunk returned by similarity search, with the fields the prompt builder

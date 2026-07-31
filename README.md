@@ -65,7 +65,6 @@ These are useful, but not the immediate priority:
 - Prisma
 - PostgreSQL
 - pgvector
-- epub.js
 - OpenAI embeddings
 - Anthropic Claude
 

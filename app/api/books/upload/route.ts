@@ -97,9 +97,9 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // `phase` lets one catch give an accurate message + status for either the
+  // `operation` lets one catch give an accurate message + status for either the
   // parse step or the persist/embed step, while cleaning up in both cases.
-  let phase: "parse" | "process" = "parse";
+  let operation: "parse" | "process" = "parse";
   try {
     const epub = await EPub.createAsync(absPath);
     const title =
@@ -136,7 +136,7 @@ export async function POST(req: NextRequest) {
     }
 
     // --- Persist Book + Chapters (PROCESSING until embeddings land) --------
-    phase = "process";
+    operation = "process";
     await prisma.book.create({
       data: {
         id: bookId,
@@ -178,7 +178,7 @@ export async function POST(req: NextRequest) {
       { status: 201 },
     );
   } catch (err) {
-    console.error(`[upload] ${phase} failed`, err);
+    console.error(`[upload] ${operation} failed`, err);
     // Roll back: remove the orphaned file and any partial book (chapters +
     // chunks cascade). deleteMany is a no-op if the book was never created.
     await removeUploadedFile(absPath);
@@ -186,7 +186,7 @@ export async function POST(req: NextRequest) {
       console.error("[upload] failed to remove partial database rows", error);
     });
 
-    if (phase === "parse") {
+    if (operation === "parse") {
       return NextResponse.json(
         { error: "Could not read this EPUB. It may be malformed or DRM-protected." },
         { status: 422 },
