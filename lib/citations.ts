@@ -40,6 +40,43 @@ export function parseCitationRefs(answer: string, sourceCount: number): number[]
 }
 
 /**
+ * Order citation objects by the first appearance of their `[n]` markers in an
+ * answer. Citations not referenced in the answer are preserved at the end in
+ * their original order rather than being silently dropped.
+ */
+export function orderCitationsByAppearance(
+  answer: string,
+  citations: CitationView[],
+): CitationView[] {
+  const highestCitationNumber = citations.reduce(
+    (highest, citation) => Math.max(highest, citation.n),
+    0,
+  );
+  const citationNumbersByAppearance = parseCitationRefs(
+    answer,
+    highestCitationNumber,
+  );
+  const citationsByNumber = new Map(
+    citations.map((citation) => [citation.n, citation]),
+  );
+
+  const orderedCitations: CitationView[] = [];
+  for (const citationNumber of citationNumbersByAppearance) {
+    const citation = citationsByNumber.get(citationNumber);
+    if (citation) {
+      orderedCitations.push(citation);
+      citationsByNumber.delete(citationNumber);
+    }
+  }
+
+  for (const citation of citations) {
+    if (citationsByNumber.has(citation.n)) orderedCitations.push(citation);
+  }
+
+  return orderedCitations;
+}
+
+/**
  * Map cited source numbers back to the chunks they reference, producing the
  * citation objects for the response (and for persistence). Pure — no DB — so it
  * works even if the history write later fails.

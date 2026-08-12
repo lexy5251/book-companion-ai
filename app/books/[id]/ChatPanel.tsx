@@ -1,36 +1,22 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import ChatAnswer from "./ChatAnswer";
-import { ChatApiError, sendChatQuestion } from "./chat-client";
 import ChatComposer from "./ChatComposer";
 import { useSelectionContext } from "./SelectionProvider";
-import type { CitationView } from "@/lib/citations";
-
-// One question→answer exchange in the visible thread. `status` drives whether
-// we show a spinner, the answer, or an error under the question. `highlight` is
-// set when the question was asked about a passage the reader selected.
-type ChatExchange = {
-  id: string;
-  question: string;
-  highlight?: string;
-  status: "pending" | "done" | "error";
-  answer?: string;
-  citations?: CitationView[];
-  error?: string;
-};
-
-// A stable-enough client id for an exchange without pulling in a uuid dep. Only used
-// as a React key, never persisted.
-let exchangeCounter = 0;
-function nextExchangeId(): string {
-  exchangeCounter += 1;
-  return `exchange-${exchangeCounter}`;
-}
+import {
+  useChatThread,
+  type ChatExchange,
+  type HistoryState,
+} from "./useChatThread";
 
 export default function ChatPanel({ bookId }: { bookId: string }) {
-  const [exchanges, setExchanges] = useState<ChatExchange[]>([]);
-  const [pending, setPending] = useState(false);
+  const {
+    exchanges,
+    historyState,
+    pending,
+    ask,
+  } = useChatThread(bookId);
   const threadRef = useRef<HTMLDivElement>(null);
   const rootRef = useRef<HTMLDivElement>(null);
   const { attachedHighlight, clearHighlight } = useSelectionContext();
@@ -49,53 +35,6 @@ export default function ChatPanel({ bookId }: { bookId: string }) {
     }
   }, [attachedHighlight]);
 
-  const updateExchange = useCallback(
-    (id: string, patch: Partial<ChatExchange>) => {
-      setExchanges((prev) =>
-        prev.map((exchange) =>
-          exchange.id === id ? { ...exchange, ...patch } : exchange,
-        ),
-      );
-    },
-    [],
-  );
-
-  const ask = useCallback(
-    async (question: string, highlight?: string) => {
-      const id = nextExchangeId();
-      setExchanges((prev) => [
-        ...prev,
-        { id, question, highlight, status: "pending" },
-      ]);
-      setPending(true);
-
-      try {
-        const data = await sendChatQuestion({
-          bookId,
-          question,
-          ...(highlight ? { highlight } : {}),
-        });
-
-        updateExchange(id, {
-          status: "done",
-          answer: data.answer,
-          citations: data.citations,
-        });
-      } catch (error) {
-        updateExchange(id, {
-          status: "error",
-          error:
-            error instanceof ChatApiError
-              ? error.message
-              : "Couldn't reach the server. Check your connection and retry.",
-        });
-      } finally {
-        setPending(false);
-      }
-    },
-    [bookId, updateExchange],
-  );
-
   return (
     <div
       ref={rootRef}
@@ -107,13 +46,7 @@ export default function ChatPanel({ bookId }: { bookId: string }) {
         aria-live="polite"
         className="flex flex-1 flex-col gap-6 overflow-y-auto p-4"
       >
-        {exchanges.length === 0 ? (
-          <EmptyHint />
-        ) : (
-          exchanges.map((exchange) => (
-            <ChatExchangeItem key={exchange.id} exchange={exchange} />
-          ))
-        )}
+        <ThreadBody historyState={historyState} exchanges={exchanges} />
       </div>
       <ChatComposer
         pending={pending}
@@ -135,6 +68,46 @@ function ChatHeader() {
         Answers are grounded in the text, with citations you can check.
       </span>
     </header>
+  );
+}
+
+// Decides what fills the thread area: the conversation itself once there's
+// anything to show, otherwise the loading / error / empty placeholder that
+// matches how history loading resolved.
+function ThreadBody({
+  historyState,
+  exchanges,
+}: {
+  historyState: HistoryState;
+  exchanges: ChatExchange[];
+}) {
+  if (exchanges.length > 0) {
+    return (
+      <>
+        {exchanges.map((exchange) => (
+          <ChatExchangeItem key={exchange.id} exchange={exchange} />
+        ))}
+      </>
+    );
+  }
+  if (historyState === "loading") return <HistoryLoading />;
+  if (historyState === "error") return <HistoryError />;
+  return <EmptyHint />;
+}
+
+function HistoryLoading() {
+  return (
+    <p className="m-auto text-sm text-zinc-400 dark:text-zinc-500">
+      Loading your conversation…
+    </p>
+  );
+}
+
+function HistoryError() {
+  return (
+    <p className="m-auto max-w-[30ch] text-center text-sm leading-relaxed text-zinc-400 dark:text-zinc-500">
+      Couldn&apos;t load earlier messages. You can still ask new questions.
+    </p>
   );
 }
 

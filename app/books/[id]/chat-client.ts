@@ -11,6 +11,17 @@ type ChatResponse = {
   citations: CitationView[];
 };
 
+// One restored question→answer turn from the book's saved conversation. Mirrors
+// the server's `ChatHistoryExchange` (lib/chat-store.ts); kept as its own type
+// here so the client bundle never imports the server-only store module.
+export type ChatHistoryExchange = {
+  id: string;
+  question: string;
+  highlight?: string;
+  answer: string;
+  citations: CitationView[];
+};
+
 export class ChatApiError extends Error {
   constructor(message: string) {
     super(message);
@@ -41,6 +52,50 @@ export async function sendChatQuestion(
   }
 
   return data;
+}
+
+export async function fetchChatHistory(
+  bookId: string,
+): Promise<ChatHistoryExchange[]> {
+  const response = await fetch(
+    `/api/books/${encodeURIComponent(bookId)}/history`,
+  );
+
+  const data: unknown = await response.json().catch(() => null);
+
+  if (!response.ok) {
+    throw new ChatApiError(
+      getErrorMessage(data) ?? "Couldn't load earlier messages.",
+    );
+  }
+
+  if (!isHistoryResponse(data)) {
+    throw new ChatApiError("The server returned an invalid history response.");
+  }
+
+  return data.exchanges;
+}
+
+function isHistoryResponse(
+  value: unknown,
+): value is { exchanges: ChatHistoryExchange[] } {
+  return (
+    isRecord(value) &&
+    Array.isArray(value.exchanges) &&
+    value.exchanges.every(isHistoryExchange)
+  );
+}
+
+function isHistoryExchange(value: unknown): value is ChatHistoryExchange {
+  if (!isRecord(value)) return false;
+  return (
+    typeof value.id === "string" &&
+    typeof value.question === "string" &&
+    (value.highlight === undefined || typeof value.highlight === "string") &&
+    typeof value.answer === "string" &&
+    Array.isArray(value.citations) &&
+    value.citations.every(isCitationView)
+  );
 }
 
 function isChatResponse(value: unknown): value is ChatResponse {
