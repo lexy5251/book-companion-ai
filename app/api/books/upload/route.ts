@@ -21,6 +21,27 @@ function stripHtml(html: string): string {
     .trim();
 }
 
+type TocEntry = { href?: string; title?: string };
+
+function removeHrefFragment(href?: string | null): string | null {
+  return href?.split("#")[0] || null;
+}
+
+function getChapterTitles(toc: readonly TocEntry[]): Map<string, string> {
+  const titles = new Map<string, string>();
+
+  for (const { href, title } of toc) {
+    const chapterHref = removeHrefFragment(href);
+    const chapterTitle = title?.trim();
+
+    if (chapterHref && chapterTitle && !titles.has(chapterHref)) {
+      titles.set(chapterHref, chapterTitle);
+    }
+  }
+
+  return titles;
+}
+
 async function removeUploadedFile(absPath: string): Promise<void> {
   try {
     await unlink(absPath);
@@ -108,6 +129,8 @@ export async function POST(req: NextRequest) {
     const language = epub.metadata.language?.trim() || null;
     const description = epub.metadata.description?.trim() || null;
 
+    const chapterTitles = getChapterTitles(epub.toc);
+
     const chapters: ChapterInput[] = [];
     let chapterIndex = 0;
     for (const item of epub.flow) {
@@ -121,10 +144,14 @@ export async function POST(req: NextRequest) {
       }
       const text = stripHtml(html);
       if (!text) continue; // skip empty items (cover, nav placeholders)
+      const chapterHref = removeHrefFragment(item.href);
+      const chapterTitle = chapterHref
+        ? chapterTitles.get(chapterHref)
+        : undefined;
       chapters.push({
         id: randomUUID(),
         chapterIndex,
-        title: item.title?.trim() || null,
+        title: chapterTitle || item.title?.trim() || null,
         href: item.href ?? null,
         contentHtml: html,
         contentText: text,

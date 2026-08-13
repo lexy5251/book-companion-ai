@@ -65,8 +65,7 @@ These are useful, but not the immediate priority:
 - Prisma
 - PostgreSQL
 - pgvector
-- OpenAI embeddings
-- Anthropic Claude
+- OpenAI (embeddings + chat completions)
 
 Planned UI component system:
 
@@ -95,7 +94,6 @@ Create a `.env` file with the required local values:
 ```env
 DATABASE_URL=
 OPENAI_API_KEY=
-ANTHROPIC_API_KEY=
 ```
 
 ## Notes

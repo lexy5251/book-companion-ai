@@ -95,6 +95,12 @@ export async function chunkEmbedAndStore(
         ) VALUES ${Prisma.join(values)}
       `);
     }
+  }, {
+    // Each inserted row updates the HNSW vector index, so a full book's inserts
+    // can far exceed Prisma's 5s default interactive-transaction timeout (see
+    // notes: hundreds of chunks, 30s–2min). Give it headroom for a real book.
+    maxWait: 15000,
+    timeout: 120000,
   });
 
   return rows.length;
