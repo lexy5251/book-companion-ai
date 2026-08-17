@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+/* Drive Tailwind's `dark:` variant from a `.dark` class (set by next-themes on
+   <html>) instead of the OS media query, so the in-app theme toggle controls it. */
+@custom-variant dark (&:where(.dark, .dark *));
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
@@ -12,11 +16,9 @@
   --font-mono: var(--font-outfit);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 }
 
 body {
@@ -30,17 +32,18 @@ body {
 .reader-prose {
   max-width: 68ch;
   margin-inline: auto;
-  font-family: var(--font-outfit), sans-serif;
-  font-size: 1.125rem;
+  /* Font family + size are driven by the reader settings control
+     (ReaderSettingsProvider); the fallbacks are the original defaults for SSR /
+     before the client applies saved values. */
+  font-family: var(--reader-font, var(--font-outfit), sans-serif);
+  font-size: var(--reader-font-size, 1.125rem);
   line-height: 1.75;
   color: #27272a; /* zinc-800 */
   overflow-wrap: break-word;
 }
 
-@media (prefers-color-scheme: dark) {
-  .reader-prose {
-    color: #d4d4d8; /* zinc-300 */
-  }
+.dark .reader-prose {
+  color: #d4d4d8; /* zinc-300 */
 }
 
 .reader-prose p {
@@ -51,30 +54,29 @@ body {
 .reader-prose h2,
 .reader-prose h3,
 .reader-prose h4 {
-  font-family: var(--font-outfit), sans-serif;
+  font-family: var(--reader-font, var(--font-outfit), sans-serif);
   font-weight: 600;
   line-height: 1.25;
   margin-block: 1.8em 0.7em;
   color: #18181b; /* zinc-900 */
 }
 
-@media (prefers-color-scheme: dark) {
-  .reader-prose h1,
-  .reader-prose h2,
-  .reader-prose h3,
-  .reader-prose h4 {
-    color: #fafafa; /* zinc-50 */
-  }
+.dark .reader-prose h1,
+.dark .reader-prose h2,
+.dark .reader-prose h3,
+.dark .reader-prose h4 {
+  color: #fafafa; /* zinc-50 */
 }
 
+/* em (not rem) so headings scale with the reader's chosen base font size. */
 .reader-prose h1 {
-  font-size: 1.9rem;
+  font-size: 1.7em;
 }
 .reader-prose h2 {
-  font-size: 1.5rem;
+  font-size: 1.35em;
 }
 .reader-prose h3 {
-  font-size: 1.25rem;
+  font-size: 1.15em;
 }
 
 .reader-prose blockquote {
@@ -85,14 +87,17 @@ body {
   color: #52525b; /* zinc-600 */
 }
 
-@media (prefers-color-scheme: dark) {
-  .reader-prose blockquote {
-    border-inline-start-color: #3f3f46;
-    color: #a1a1aa;
-  }
+.dark .reader-prose blockquote {
+  border-inline-start-color: #3f3f46;
+  color: #a1a1aa;
 }
 
-.reader-prose a {
+/* Only real hyperlinks (with href) get link styling. EPUBs from Project
+   Gutenberg are full of bare anchor targets — <a id="..."/> with no href, used
+   as footnote/section markers. Because the reader injects HTML (not XHTML),
+   those self-closing anchors stay "open" and wrap the following paragraph text;
+   styling all <a> would paint whole passages blue and underlined. */
+.reader-prose a[href] {
   color: #2563eb;
   text-decoration: underline;
   text-underline-offset: 2px;
@@ -119,8 +124,6 @@ body {
   border-top: 1px solid #e4e4e7;
 }
 
-@media (prefers-color-scheme: dark) {
-  .reader-prose hr {
-    border-top-color: #27272a;
-  }
+.dark .reader-prose hr {
+  border-top-color: #27272a;
 }

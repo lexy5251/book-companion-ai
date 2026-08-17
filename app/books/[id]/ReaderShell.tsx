@@ -1,5 +1,6 @@
 import ChatPanel from "./ChatPanel";
 import ChapterNavigation from "./ChapterNavigation";
+import ReaderSettingsControl from "./ReaderSettingsControl";
 import { SelectionProvider } from "./SelectionProvider";
 import SelectionListener from "./SelectionListener";
 import TableOfContents from "./TableOfContents";
@@ -80,6 +81,9 @@ export default function ReaderShell({
           {/* Reading column. SelectionListener watches for highlighted passages
               in the article and surfaces the "Ask about this" popover. */}
           <main className="min-w-0">
+            <div className="mb-4 flex justify-end">
+              <ReaderSettingsControl />
+            </div>
             <SelectionListener>
               <article
                 className="reader-prose"

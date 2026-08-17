@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { sanitizeChapterHtml } from "@/lib/sanitize-html";
 import ReaderShell from "./ReaderShell";
+import { ReaderSettingsProvider } from "./ReaderSettingsProvider";
 
 // Chapter titles are often null because epub2 can leave spine-item titles
 // undefined. Fall back to the same "Chapter N" label the citations use
@@ -79,16 +80,18 @@ export default async function BookReaderPage({
   const html = sanitizeChapterHtml(chapter.contentHtml);
 
   return (
-    <ReaderShell
-      bookId={book.id}
-      bookTitle={book.title}
-      bookAuthor={book.author}
-      chapters={book.chapters.map((ch, position) => ({
-        position,
-        label: chapterLabel(ch),
-      }))}
-      currentPosition={position}
-      chapterHtml={html}
-    />
+    <ReaderSettingsProvider>
+      <ReaderShell
+        bookId={book.id}
+        bookTitle={book.title}
+        bookAuthor={book.author}
+        chapters={book.chapters.map((ch, position) => ({
+          position,
+          label: chapterLabel(ch),
+        }))}
+        currentPosition={position}
+        chapterHtml={html}
+      />
+    </ReaderSettingsProvider>
   );
 }
