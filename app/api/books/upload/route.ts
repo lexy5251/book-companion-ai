@@ -5,6 +5,11 @@ import path from "node:path";
 import { EPub } from "epub2";
 import { prisma } from "@/lib/prisma";
 import { chunkEmbedAndStore } from "@/lib/chunk-store";
+import {
+  checkUploadRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 const MAX_BYTES = 50 * 1024 * 1024; // keep in sync with the upload UI
 const UPLOAD_DIR = path.join(process.cwd(), "uploads");
@@ -62,6 +67,15 @@ type ChapterInput = {
 };
 
 export async function POST(req: NextRequest) {
+  // Reject over-limit clients before reading the file or embedding anything.
+  const limit = await checkUploadRateLimit(getClientIp(req.headers));
+  if (!limit.ok) {
+    return rateLimitResponse(
+      "You're uploading too frequently. Please wait a bit and try again.",
+      limit.retryAfter,
+    );
+  }
+
   // --- Read + validate the uploaded file -----------------------------------
   let form: FormData;
   try {

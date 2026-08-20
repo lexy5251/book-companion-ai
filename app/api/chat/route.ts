@@ -17,6 +17,11 @@ import {
   type CitationView,
 } from "@/lib/citations";
 import { persistChatTurn } from "@/lib/chat-store";
+import {
+  checkChatRateLimit,
+  getClientIp,
+  rateLimitResponse,
+} from "@/lib/rate-limit";
 
 const MAX_QUESTION_CHARS = 2000;
 const MAX_HIGHLIGHT_CHARS = 10000;
@@ -241,6 +246,15 @@ async function processChatRequest(request: ChatRequest): Promise<NextResponse> {
 }
 
 export async function POST(req: NextRequest) {
+  // Reject over-limit clients before doing any paid work (embedding + LLM call).
+  const limit = await checkChatRateLimit(getClientIp(req.headers));
+  if (!limit.ok) {
+    return rateLimitResponse(
+      "You're sending messages too quickly. Please wait a moment and try again.",
+      limit.retryAfter,
+    );
+  }
+
   let body: unknown;
   try {
     body = await req.json();
