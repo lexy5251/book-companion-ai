@@ -11,8 +11,12 @@ import {
   rateLimitResponse,
 } from "@/lib/rate-limit";
 
+// The parse + embed pipeline runs 30s–2min; raise the serverless function
+// timeout so uploads aren't killed mid-embed (Vercel Hobby caps this at 60s).
+export const maxDuration = 60;
+
 const MAX_BYTES = 50 * 1024 * 1024; // keep in sync with the upload UI
-const UPLOAD_DIR = path.join(process.cwd(), "uploads");
+const UPLOAD_DIR = process.env.UPLOAD_DIR ?? path.join(process.cwd(), "uploads");
 
 /** Rough plain-text extraction from chapter HTML — good enough for chunking /
  *  search; the original HTML is kept in `contentHtml` for rendering. */
